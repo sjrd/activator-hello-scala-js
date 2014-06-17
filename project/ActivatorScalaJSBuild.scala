@@ -55,6 +55,8 @@ object ActivatorScalaJSBuild extends Build {
   }
 
   private def startServer(targetDir: File): Server = {
+    // Disable logging from Jetty
+    sys.props("org.eclipse.jetty.LEVEL") = "OFF"
     val server = new Server(8889)
 
     val resourceHandler = new CrossDomainResourceHandler();

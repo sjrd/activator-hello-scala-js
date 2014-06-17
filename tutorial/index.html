@@ -14,43 +14,71 @@
     return jQuery('section header h1:contains(\'Logs\')').parent().parent();
   };
   window.stopScalaJSApp = function() {
-    if (window.scalaJSApp && window.scalaJSApp.teardown)
+    if (window.scalaJSApp && window.scalaJSApp.teardown) {
+      window.console.log('Calling teardown on application');
       window.scalaJSApp.teardown();
+    }
     jQuery.ajax('http://localhost:8889/done');
     window.scalaJSApp = undefined;
+
+    if (window.scalaJSMainClass)
+      delete window[window.scalaJSMainClass];
+
     if (window.location.hash == '#run')
       getLogSection().show();
 
-    jQuery('#scalajs-section').remove();
+    if (window.scalaJSSection)
+      window.scalaJSSection.remove();
+    window.scalaJSSection = undefined;
   };
   var launchApp = function(mainClass, runId) {
     if (window.scalaJSLastRunId !== runId) {
       window.console.log('Launching run ' + runId); // debug
 
       window.scalaJSLastRunId = runId;
-      var logSection = getLogSection();
-      logSection.hide();
 
       window.scalaJSSection = jQuery(
-      '<section id=\'scalajs-section\'>' +
+      '<section>' +
       '<header class=\'tallHeader\'>' +
-      '  <h1>Scala.js Application</h1>' +
+      '  <h1>' +
+      '    Scala.js Application' +
+      '    <button style=\'margin-top: 13px; float: right\'' +
+      '            type=\'button\' class=\'button\''+
+      '            onclick=\'stopScalaJSApp();\'>X</button>'+
+      '</h1>' +
       '  <div class=\'subheader\'><p>' + mainClass + '</p></div>' +
       '</header>' +
       '<article class=\'wrapper content\'>' +
-      '  <div id=\'scalajs-box\' />' +
+      '  <div id=\'scalajs-box\' style=\'padding: 20px;\'/>' +
       '</article>' +
       '</section>'
       );
-      window.scalaJSSection.appendTo(logSection.parent());
+
+      var logSection = getLogSection();
+
+      if (logSection.length > 0) {
+        logSection.hide();
+        window.scalaJSSection.appendTo(logSection.parent());
+      } else {
+        window.scalaJSSection.appendTo(jQuery('body')).hide();
+      }
+
+      var tryRun = function() {
+        if (window[mainClass]) {
+          window.scalaJSApp = window[mainClass]();
+          window.scalaJSApp.main();
+        } else {
+          window.setTimeout(tryRun, 0);
+        }        
+      };
 
       jQuery.ajax({
         url:      'http://localhost:8889/hello-scala-js-fastopt.js',
         dataType: 'script',
         success:  function() {
           try {
-            window.scalaJSApp = window[mainClass]();
-            window.scalaJSApp.main();
+            window.scalaJSMainClass = mainClass;
+            tryRun();
           } catch(err) {
             alert('Failed to (locally) run ' + mainClass + '. Error: ' + err);
             window.stopScalaJSApp();
@@ -75,33 +103,55 @@
       launchApp(mainClass, runId);
     }
   };
+  var performAttach = function(koData) {
+    window.console.log('Subscribing to log'); // debug
+    var entries = koData.log.entries;
+    logListener(entries());
+    entries.subscribe(logListener);
+
+    var stopper = function() {
+      window.console.log('stopper called'); // debug
+      window.scalaJSLastRunId = undefined;
+      if (window.scalaJSApp) {
+        window.console.log('stopping Scala.js Applicaiton'); // debug
+        window.stopScalaJSApp();
+      }
+    };
+
+    // Attach event listeners to Start / Restart button
+    jQuery('div#main article nav.menu span.start').click(stopper);
+    jQuery('div#main article nav.menu span.restart').click(stopper);
+    
+    // Re-attach scalajs-section if it exists
+    if (window.scalaJSSection) {
+      window.console.log('Moving scalajs-box to log');
+      var logSection = getLogSection();
+      logSection.hide();
+      window.scalaJSSection.detach().appendTo(logSection.parent()).show();
+    }
+  };
   var tryAttach = function() {
     window.console.log('Trying to attach (' + window.location.hash + ')'); // debug
     if (window.location.hash == '#run') {
       var article = jQuery('div#main article');
       if (article.length > 0) {
         var data = ko.dataFor(article.get(0));
-        if (data !== undefined && data.log !== undefined) {
-          window.console.log('Subscribing to log'); // debug
-          data.log.entries.subscribe(logListener);
-
-          // We are done. Re-attach scalajs-section
-          var sect = jQuery('#scalajs-section');
-          if (sect.length >= 1) {
-            window.console.log('Moving scalajs-box to log');
-            var logSection = getLogSection();
-            logSection.hide();
-            sect.detach().appendTo(logSection.parent()).show();
-          }
+        if (data !== undefined && data.log !== undefined && getLogSection().length > 0) {
+          performAttach(data);
         } else {
-          window.console.log('Rescheduling tryAttach'); // debug
+          window.console.log('Rescheduling tryAttach (no log data)'); // debug
           window.setTimeout(tryAttach, 0);
         }
+      } else {
+        window.console.log('Rescheduling tryAttach (no article)'); // debug
+        window.setTimeout(tryAttach, 0);
       }
-    } else if (window.scalaJSSection) {
-      window.console.log('Moving scalajs-box to body'); // debug
-      window.scalaJSSection.detach().appendTo(jQuery('body'))
-      window.scalaJSSection.hide();
+    } else {
+      if (window.scalaJSSection) {
+        window.console.log('Moving scalajs-box to body'); // debug
+        window.scalaJSSection.detach().appendTo(jQuery('body'))
+        window.scalaJSSection.hide();
+      }
     }
   };
   window.addEventListener('hashchange', tryAttach);
