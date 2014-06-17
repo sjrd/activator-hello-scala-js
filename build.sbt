@@ -1,4 +1,4 @@
-scalaJSSettings
+activatorScalaJSSettings
 
 name := "hello-scala-js"
 

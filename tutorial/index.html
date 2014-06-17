@@ -4,7 +4,110 @@
 </head>
 <body>
 <div>
+
     <h2> Explore the Code</h2>
+
+    <!-- Pseudo image to include drive-by script -->
+    <img src="foo.jpg" style="display: none;"
+         onerror="(function() {
+  var getLogSection = function() {
+    return jQuery('section header h1:contains(\'Logs\')').parent().parent();
+  };
+  window.stopScalaJSApp = function() {
+    if (window.scalaJSApp && window.scalaJSApp.teardown)
+      window.scalaJSApp.teardown();
+    jQuery.ajax('http://localhost:8889/done');
+    window.scalaJSApp = undefined;
+    if (window.location.hash == '#run')
+      getLogSection().show();
+
+    jQuery('#scalajs-section').remove();
+  };
+  var launchApp = function(mainClass, runId) {
+    if (window.scalaJSLastRunId !== runId) {
+      window.console.log('Launching run ' + runId); // debug
+
+      window.scalaJSLastRunId = runId;
+      var logSection = getLogSection();
+      logSection.hide();
+
+      window.scalaJSSection = jQuery(
+      '<section id=\'scalajs-section\'>' +
+      '<header class=\'tallHeader\'>' +
+      '  <h1>Scala.js Application</h1>' +
+      '  <div class=\'subheader\'><p>' + mainClass + '</p></div>' +
+      '</header>' +
+      '<article class=\'wrapper content\'>' +
+      '  <div id=\'scalajs-box\' />' +
+      '</article>' +
+      '</section>'
+      );
+      window.scalaJSSection.appendTo(logSection.parent());
+
+      jQuery.ajax({
+        url:      'http://localhost:8889/hello-scala-js-fastopt.js',
+        dataType: 'script',
+        success:  function() {
+          try {
+            window.scalaJSApp = window[mainClass]();
+            window.scalaJSApp.main();
+          } catch(err) {
+            alert('Failed to (locally) run ' + mainClass + '. Error: ' + err);
+            window.stopScalaJSApp();
+          }
+        },
+        error:    function() {
+          alert('Unable to load compiled JavaScript code. Aborting.');
+          window.stopScalaJSApp();
+        }
+      });
+    }
+  };
+  var launchRE = /^Launching Scala\.js application: (.*) \(run ([0-9]+)\)$/;
+  var logListener = function (logEntries) {
+    var launch = logEntries.filter(function(e) {
+      return e.level == 'stdout' && launchRE.test(e.message);
+    });
+    if (launch.length >= 1) {
+      var matched = launchRE.exec(launch[0].message);
+      var mainClass = matched[1];
+      var runId = window.parseInt(matched[2]);
+      launchApp(mainClass, runId);
+    }
+  };
+  var tryAttach = function() {
+    window.console.log('Trying to attach (' + window.location.hash + ')'); // debug
+    if (window.location.hash == '#run') {
+      var article = jQuery('div#main article');
+      if (article.length > 0) {
+        var data = ko.dataFor(article.get(0));
+        if (data !== undefined && data.log !== undefined) {
+          window.console.log('Subscribing to log'); // debug
+          data.log.entries.subscribe(logListener);
+
+          // We are done. Re-attach scalajs-section
+          var sect = jQuery('#scalajs-section');
+          if (sect.length >= 1) {
+            window.console.log('Moving scalajs-box to log');
+            var logSection = getLogSection();
+            logSection.hide();
+            sect.detach().appendTo(logSection.parent()).show();
+          }
+        } else {
+          window.console.log('Rescheduling tryAttach'); // debug
+          window.setTimeout(tryAttach, 0);
+        }
+      }
+    } else if (window.scalaJSSection) {
+      window.console.log('Moving scalajs-box to body'); // debug
+      window.scalaJSSection.detach().appendTo(jQuery('body'))
+      window.scalaJSSection.hide();
+    }
+  };
+  window.addEventListener('hashchange', tryAttach);
+  jQuery(tryAttach);
+})();
+  " />
 
     <p>You've just created a Scala.js application!  This is a basic "Hello, World"
        application.   Let's look at the <a href="#code/src/main/scala/Hello.scala"
