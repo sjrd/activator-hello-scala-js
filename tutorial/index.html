@@ -94,10 +94,10 @@
   var launchRE = /^Launching Scala\.js application: (.*) \(run ([0-9]+)\)$/;
   var logListener = function (logEntries) {
     var launch = logEntries.filter(function(e) {
-      return e.level == 'stdout' && launchRE.test(e.message);
+      return e.level == 'stdout' && launchRE.test(e.message.trim());
     });
     if (launch.length >= 1) {
-      var matched = launchRE.exec(launch[0].message);
+      var matched = launchRE.exec(launch[0].message.trim());
       var mainClass = matched[1];
       var runId = window.parseInt(matched[2]);
       launchApp(mainClass, runId);
